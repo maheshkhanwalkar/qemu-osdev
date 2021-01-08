@@ -237,6 +237,21 @@ SRST
     Show virtual to physical memory mappings.
 ERST
 
+#if defined(TARGET_I386)
+    {
+        .name       = "gdt",
+        .args_type  = "",
+        .params     = "",
+        .help       = "show the GDT entries",
+        .cmd        = hmp_info_gdt,
+    },
+#endif
+
+SRST
+  ``info gdt``
+    Show the GDT entries.
+ERST
+
 #if defined(TARGET_I386) || defined(TARGET_RISCV)
     {
         .name       = "mem",

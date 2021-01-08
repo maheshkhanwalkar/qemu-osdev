@@ -578,6 +578,72 @@ void hmp_info_mem(Monitor *mon, const QDict *qdict)
     }
 }
 
+#ifdef TARGET_X86_64
+static void dump_gdt(Monitor* mon, CPUArchState* env)
+{
+    monitor_printf(mon, "base_addr: 0x%llx, limit: 0x%x\n", env->gdt.base, env->gdt.limit);
+}
+#else
+
+typedef struct gdt_entry {
+    uint8_t base_high;
+    uint8_t limit_high;
+    uint8_t flags;
+    uint8_t base_mid;
+    uint16_t base_low;
+    uint16_t limit_low;
+} __attribute__((packed)) gdt_entry_t;
+
+static void dump_gdt_entries(Monitor* mon, uint32_t base, uint32_t limit)
+{
+    uint32_t sz = sizeof(gdt_entry_t);
+
+    gdt_entry_t* entries = malloc(limit / sz);
+    cpu_physical_memory_read(base, entries, limit);
+
+    for(uint32_t i = 0; i < limit / sz; i++) {
+        uint32_t seg_base = (entries[i].base_high << 24) | (entries[i].base_mid << 16) | entries[i].base_low;
+        uint32_t seg_limit = ((entries[i].limit_high & 0xF) << 16) | entries[i].limit_low;
+
+        // When 'G' is set -- scale the limit by 4 KB
+        if(entries[i].limit_high & 0x80) {
+            seg_limit *= 0x1000;
+        }
+
+        monitor_printf(mon, "seg 0x%x: base: 0x%x, limit: 0x%x\n", i * sz, seg_base, seg_limit);
+    }
+
+    free(entries);
+}
+
+static void dump_gdt(Monitor* mon, CPUArchState* env)
+{
+    uint32_t base = env->gdt.base;
+    uint32_t limit = env->gdt.limit;
+
+    monitor_printf(mon, "base addr: 0x%x, limit: 0x%x\n", base, limit);
+
+    if(!(env->cr[0] & CR0_PG_MASK)) {
+        dump_gdt_entries(mon, base, limit);
+    } else {
+        // Need to translate to physical address
+        // TODO
+    }
+}
+#endif
+
+void hmp_info_gdt(Monitor* mon, const QDict* qdict)
+{
+    CPUArchState* env = mon_get_cpu_env(mon);
+
+    if(!env) {
+        monitor_printf(mon, "No CPU available\n");
+        return;
+    }
+
+    dump_gdt(mon, env);
+}
+
 void hmp_mce(Monitor *mon, const QDict *qdict)
 {
     X86CPU *cpu;
